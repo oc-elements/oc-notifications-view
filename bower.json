@@ -15,7 +15,7 @@
     "paper-card": "PolymerElements/paper-card#^1.1.1",
     "oc-core-utils": "git://github.com/oc-elements/oc-core-utils#1.x",
     "oc-notifications-api": "git://github.com/oc-elements/oc-notifications-api#1.x",
-    "oc-notifications-form": "git://github.com/oc-elements/oc-notification-form#1.x"
+    "oc-notification-form": "git://github.com/oc-elements/oc-notification-form#1.x"
   },
   "devDependencies": {
     "iron-component-page": "PolymerElements/iron-component-page#^1.0.0",
