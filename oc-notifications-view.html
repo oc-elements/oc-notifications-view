@@ -2,8 +2,9 @@
 
 <link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
 <link rel="import" href="../iron-collapse/iron-collapse.html">
+<link rel="import" href="../iron-icons/iron-icons.html">
 <link rel="import" href="../iron-icon/iron-icon.html">
-                         ..
+..
 <link rel="import" href="../paper-toggle-button/paper-toggle-button.html">
 <link rel="import" href="../paper-icon-button/paper-icon-button.html">
 <link rel="import" href="../paper-progress/paper-progress.html">
@@ -18,7 +19,7 @@
 <!--<link rel="import" href="../oc-core-utils/oc-core.html">-->
 <link rel="import" href="./table-styles.html">
 
-<dom-module id="oc-notifiactions-view">
+<dom-module id="oc-notifications-view">
 
   <template>
     <style include="table-styles"></style>
@@ -106,93 +107,99 @@
 
     <paper-toast id="toast"></paper-toast>
 
-    <oc-notifications-api
-            id="notificationsApi"
-            authorisation="[[ authorisation ]]"
-            organisation-token="[[ organisationToken ]]"
-            environment="[[ environment ]]"
-    ></oc-notifications-api>
+    <oc-notifications-api id="notificationsApi"></oc-notifications-api>
 
   </template>
 
   <script>
-    (function () {
-      'use strict';
+    Polymer({
+      is: 'oc-notifications-view',
+      behaviors: [OC.Behaviours.ApiConsumer],
 
-      Polymer({
-        is: 'oc-notifiactions-view',
-        behaviors: [OC.Behaviours.ApiConsumer, OC.Behaviours.Formatter],
+      properties: {
+        organisationId: Number
+      },
 
-        properties: {
-          organisationId: Number
-        },
+      observers: [
+        'load(organisationId)'
+      ],
 
-        listeners: {
-          'notification-form-cancelled': '_closeForm',
-          'notification-form-save': '_save'
-        },
+      listeners: {
+        'notification-form-cancelled': '_closeForm',
+        'notification-form-save': '_save'
+      },
 
-        load: function() {
-          this._showElement('progress');
-          this._hideElement('loadingError');
-          this.subscriptions = null;
-          this.$.notificationsApi.getSubscriptions(this.organisationId)
-                  .then(this._setPropertyResponseResults.bind(this, 'subscriptions'))
-                  .catch(this._showElement.bind(this, 'loadingError'))
-                  .finally(this._hideElement.bind(this, 'progress'));
-          this.$.notificationsApi.getEventTypes()
-                  .then(this._setPropertyResponseResults.bind(this, 'eventTypes'))
-                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to load event types'));
-        },
+      load: function() {
+        this._showElement('progress');
+        //this._hideElement('loadingError');
+        this.subscriptions = null;
+        this.$.notificationsApi.getSubscriptions(this.organisationId)
+                .then(this._setPropertyResponseResults.bind(this, 'subscriptions'))
+                .catch(/*this._showElement.bind(this, 'loadingError')*/)
+                .finally(this._hideElement.bind(this, 'progress'));
+        this.$.notificationsApi.getEventTypes()
+                .then(this._setPropertyResponseResults.bind(this, 'eventTypes'))
+                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to load event types'));
+      },
 
-        _save: function(event, subscription) {
-          (
-                  'id' in subscription ?
-                          this.$.notificationsApi.updateSubscription(subscription) :
-                          this.$.notificationsApi.createSubscription(subscription, this.organisationId)
-          )
-                  .then(this.load.bind(this))
-                  .then(this._closeForm.bind(this))
-                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to save notification'));
-        },
+      _save: function(event, subscription) {
+        (
+                'id' in subscription ?
+                        this.$.notificationsApi.updateSubscription(subscription) :
+                        this.$.notificationsApi.createSubscription(subscription, this.organisationId)
+        )
+                .then(this.load.bind(this))
+                .then(this._closeForm.bind(this))
+                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to save notification'));
+      },
 
-        _whenToggled: function(event) {
-          (
-                  event.target.checked ?
-                          this.$.notificationsApi.enableSubscription(event.model.subscription.id) :
-                          this.$.notificationsApi.disableSubscription(event.model.subscription.id)
-          )
-                  .catch(this._handleToggleFailed.bind(this, event.target));
-        },
-        _handleToggleFailed: function(toggleBtn) {
-          this.$.toast.show('Failed to ' + (toggleBtn.checked ? 'en' : 'dis') + 'able notification');
-          toggleBtn.checked = !toggleBtn.checked;
-        },
+      _whenToggled: function(event) {
+        (
+                event.target.checked ?
+                        this.$.notificationsApi.enableSubscription(event.model.subscription.id) :
+                        this.$.notificationsApi.disableSubscription(event.model.subscription.id)
+        )
+                .catch(this._handleToggleFailed.bind(this, event.target));
+      },
+      _handleToggleFailed: function(toggleBtn) {
+        this.$.toast.show('Failed to ' + (toggleBtn.checked ? 'en' : 'dis') + 'able notification');
+        toggleBtn.checked = !toggleBtn.checked;
+      },
 
-        _whenDeleteBtnClicked: function(event) {
-          this.$.notificationsApi.deleteSubscription(event.model.subscription.id)
-                  .then(this.load.bind(this))
-                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to delete notification'));
-        },
+      _whenDeleteBtnClicked: function(event) {
+        this.$.notificationsApi.deleteSubscription(event.model.subscription.id)
+                .then(this.load.bind(this))
+                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to delete notification'));
+      },
 
-        _openForm: function(event) {
-          this.$.form.init(event.model ? event.model.subscription : null);
-          this.$.notificationsListContainer.hide();
-          this.$.notificationsFormContainer.show();
-        },
-        _closeForm: function() {
-          this.$.form.subscription = null;
-          this.$.notificationsListContainer.show();
-          this.$.notificationsFormContainer.hide();
-        },
-        _getPartyNames: function(parties) {
-          return parties.map(function(party) {
-            return party.displayName;
-          })
-        },
+      _openForm: function(event) {
+        this.$.form.init(event.model ? event.model.subscription : null);
+        this.$.notificationsListContainer.hide();
+        this.$.notificationsFormContainer.show();
+      },
+      _closeForm: function() {
+        this.$.form.subscription = null;
+        this.$.notificationsListContainer.show();
+        this.$.notificationsFormContainer.hide();
+      },
+      _getPartyNames: function(parties) {
+        return parties.map(function(party) {
+          return party.displayName;
+        })
+      },
 
-      });
-    })();
+      _showElement: function(elementId) {
+        this.$[elementId].hidden = false;
+      },
+
+      _hideElement: function(elementId) {
+        this.$[elementId].hidden = true;
+      },
+
+      _isEmpty: function (response) {
+        return response && response.length === 0;
+      }
+    });
   </script>
 
 </dom-module>
