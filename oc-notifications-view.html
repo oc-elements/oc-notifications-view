@@ -1,0 +1,199 @@
+<link rel="import" href="../polymer/polymer.html">
+
+<link rel="import" href="../iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../iron-collapse/iron-collapse.html">
+<link rel="import" href="../iron-icon/iron-icon.html">
+                         ..
+<link rel="import" href="../paper-toggle-button/paper-toggle-button.html">
+<link rel="import" href="../paper-icon-button/paper-icon-button.html">
+<link rel="import" href="../paper-progress/paper-progress.html">
+<link rel="import" href="../paper-button/paper-button.html">
+<link rel="import" href="../paper-toast/paper-toast.html">
+<link rel="import" href="../paper-card/paper-card.html">
+
+<link rel="import" href="../oc-notifications-api/oc-notifications-api.html">
+<link rel="import" href="../oc-notification-form/oc-notification-form.html">
+<link rel="import" href="../oc-core-utils/oc-api-consumer-behaviour.html">
+<!--<link rel="import" href="../errors/error-loading.html">-->
+<!--<link rel="import" href="../oc-core-utils/oc-core.html">-->
+<link rel="import" href="./table-styles.html">
+
+<dom-module id="oc-notifiactions-view">
+
+  <template>
+    <style include="table-styles"></style>
+    <style>
+      :host {
+        display: block;
+        width: 100%;
+      }
+      paper-card {
+        width: 100%;
+      }
+      #notificationsListContainer .card-content {
+        @apply(--layout-horizontal);
+        @apply(--layout-start);
+      }
+      #notificationsListContainer .card-content p {
+        @apply(--layout-flex);
+        margin: 0 1em 0 0;
+      }
+      #createBtn {
+        color: var(--text-primary-color);
+        background-color: var(--paper-green-400);
+      }
+    </style>
+
+
+    <iron-collapse id="notificationsListContainer" opened>
+      <paper-card heading="Notification subscriptions">
+        <div class="card-content">
+          <p>
+            <!--Some description about how notifications work-->
+          </p>
+          <paper-button id="createBtn" raised on-tap="_openForm">New</paper-button>
+        </div>
+
+        <table>
+          <thead><tr>
+            <th>Event Type</th>
+            <th>Channel</th>
+            <th>Parties</th>
+            <th>Recipients</th>
+            <th width="92">Enabled</th>
+            <th width="108"></th>
+          </tr></thead>
+          <tbody>
+          <template is="dom-repeat" items="[[ subscriptions ]]" as="subscription">
+            <tr>
+              <td>[[ subscription.eventType.displayName ]]</td>
+              <td>[[ subscription.channel.displayName ]]</td>
+              <td>[[ _getPartyNames(subscription.parties) ]]</td>
+              <td>[[ subscription.recipients ]]</td>
+              <td>
+                <paper-toggle-button checked$="[[ subscription.enabled ]]" on-change="_whenToggled"></paper-toggle-button>
+              </td>
+              <td>
+                <paper-icon-button icon="icons:create" on-tap="_openForm"></paper-icon-button>
+                <paper-icon-button icon="icons:delete" on-tap="_whenDeleteBtnClicked"></paper-icon-button>
+              </td>
+            </tr>
+          </template>
+          </tbody>
+        </table>
+
+        <paper-progress id="progress" indeterminate></paper-progress>
+
+        <error-loading
+                show-if="[[ _isEmpty(subscriptions) ]]"
+                message="No notification subscriptions found"
+        ></error-loading>
+
+        <error-loading
+                id="loadingError"
+                show-if="true"
+                hidden
+                message="Failed to load notification subscriptions"
+                retryable on-retry="load"
+        ></error-loading>
+
+      </paper-card>
+    </iron-collapse>
+
+    <iron-collapse id="notificationsFormContainer">
+      <oc-notification-form id="form" event-types="[[ eventTypes ]]"></oc-notification-form>
+    </iron-collapse>
+
+    <paper-toast id="toast"></paper-toast>
+
+    <oc-notifications-api
+            id="notificationsApi"
+            authorisation="[[ authorisation ]]"
+            organisation-token="[[ organisationToken ]]"
+            environment="[[ environment ]]"
+    ></oc-notifications-api>
+
+  </template>
+
+  <script>
+    (function () {
+      'use strict';
+
+      Polymer({
+        is: 'oc-notifiactions-view',
+        behaviors: [OC.Behaviours.ApiConsumer, OC.Behaviours.Formatter],
+
+        properties: {
+          organisationId: Number
+        },
+
+        listeners: {
+          'notification-form-cancelled': '_closeForm',
+          'notification-form-save': '_save'
+        },
+
+        load: function() {
+          this._showElement('progress');
+          this._hideElement('loadingError');
+          this.subscriptions = null;
+          this.$.notificationsApi.getSubscriptions(this.organisationId)
+                  .then(this._setPropertyResponseResults.bind(this, 'subscriptions'))
+                  .catch(this._showElement.bind(this, 'loadingError'))
+                  .finally(this._hideElement.bind(this, 'progress'));
+          this.$.notificationsApi.getEventTypes()
+                  .then(this._setPropertyResponseResults.bind(this, 'eventTypes'))
+                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to load event types'));
+        },
+
+        _save: function(event, subscription) {
+          (
+                  'id' in subscription ?
+                          this.$.notificationsApi.updateSubscription(subscription) :
+                          this.$.notificationsApi.createSubscription(subscription, this.organisationId)
+          )
+                  .then(this.load.bind(this))
+                  .then(this._closeForm.bind(this))
+                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to save notification'));
+        },
+
+        _whenToggled: function(event) {
+          (
+                  event.target.checked ?
+                          this.$.notificationsApi.enableSubscription(event.model.subscription.id) :
+                          this.$.notificationsApi.disableSubscription(event.model.subscription.id)
+          )
+                  .catch(this._handleToggleFailed.bind(this, event.target));
+        },
+        _handleToggleFailed: function(toggleBtn) {
+          this.$.toast.show('Failed to ' + (toggleBtn.checked ? 'en' : 'dis') + 'able notification');
+          toggleBtn.checked = !toggleBtn.checked;
+        },
+
+        _whenDeleteBtnClicked: function(event) {
+          this.$.notificationsApi.deleteSubscription(event.model.subscription.id)
+                  .then(this.load.bind(this))
+                  .catch(this.$.toast.show.bind(this.$.toast, 'Failed to delete notification'));
+        },
+
+        _openForm: function(event) {
+          this.$.form.init(event.model ? event.model.subscription : null);
+          this.$.notificationsListContainer.hide();
+          this.$.notificationsFormContainer.show();
+        },
+        _closeForm: function() {
+          this.$.form.subscription = null;
+          this.$.notificationsListContainer.show();
+          this.$.notificationsFormContainer.hide();
+        },
+        _getPartyNames: function(parties) {
+          return parties.map(function(party) {
+            return party.displayName;
+          })
+        },
+
+      });
+    })();
+  </script>
+
+</dom-module>
+
