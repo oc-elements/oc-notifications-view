@@ -20,31 +20,31 @@
 
 <dom-module id="oc-notifications-view">
 
+  <style include="table-styles"></style>
+  <style>
+    :host {
+      display: block;
+      width: 100%;
+    }
+    paper-card {
+      width: 100%;
+    }
+    #notificationsListContainer .card-content {
+      @apply(--layout-horizontal);
+      @apply(--layout-start);
+    }
+    #notificationsListContainer .card-content p {
+      @apply(--layout-flex);
+      margin: 0 1em 0 0;
+    }
+    #createBtn {
+      color: var(--text-primary-color);
+      background-color: var(--paper-green-400);
+    }
+  </style>
+
   <template>
-    <style include="table-styles"></style>
-    <style>
-      :host {
-        display: block;
-        width: 100%;
-      }
-      paper-card {
-        width: 100%;
-      }
-      #notificationsListContainer .card-content {
-        @apply(--layout-horizontal);
-        @apply(--layout-start);
-      }
-      #notificationsListContainer .card-content p {
-        @apply(--layout-flex);
-        margin: 0 1em 0 0;
-      }
-      #createBtn {
-        color: var(--text-primary-color);
-        background-color: var(--paper-green-400);
-      }
-    </style>
-
-
+    <!--<paper-progress indeterminate hidden$="[[ !loading ]]"></paper-progress>-->
     <iron-collapse id="notificationsListContainer" opened>
       <paper-card heading="Notification subscriptions">
         <div class="card-content">
@@ -82,8 +82,6 @@
           </tbody>
         </table>
 
-        <paper-progress id="progress" indeterminate></paper-progress>
-
         <error-loading
                 show-if="[[ _isEmpty(subscriptions) ]]"
                 message="No notification subscriptions found"
@@ -104,8 +102,6 @@
       <oc-notification-form id="form" event-types="[[ eventTypes ]]"></oc-notification-form>
     </iron-collapse>
 
-    <paper-toast id="toast"></paper-toast>
-
     <oc-notifications-api id="notificationsApi"></oc-notifications-api>
 
   </template>
@@ -116,7 +112,11 @@
       behaviors: [OC.Behaviours.ApiConsumer],
 
       properties: {
-        organisationId: Number
+        organisationId: Number,
+        loading: {
+          type: Boolean,
+          notify: true
+        }
       },
 
       observers: [
@@ -129,16 +129,16 @@
       },
 
       load: function() {
-        this._showElement('progress');
-        //this._hideElement('loadingError');
+        this.loading = true;
+        this._hideElement('loadingError');
         this.subscriptions = null;
         this.$.notificationsApi.getSubscriptions(this.organisationId)
                 .then(this._setPropertyResponseResults.bind(this, 'subscriptions'))
-                .catch(/*this._showElement.bind(this, 'loadingError')*/)
-                .finally(this._hideElement.bind(this, 'progress'));
+                .catch(this._showElement.bind(this, 'loadingError'))
+                .finally(this.set.bind(this, 'loading', false));
         this.$.notificationsApi.getEventTypes()
                 .then(this._setPropertyResponseResults.bind(this, 'eventTypes'))
-                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to load event types'));
+                .catch(this.fire.bind(this, 'toast', 'Failed to load event types'));
       },
 
       _save: function(event, subscription) {
@@ -149,7 +149,7 @@
         )
                 .then(this.load.bind(this))
                 .then(this._closeForm.bind(this))
-                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to save notification'));
+                .catch(this.fire.bind(this, 'toast', 'Failed to save notification'));
       },
 
       _whenToggled: function(event) {
@@ -161,14 +161,14 @@
                 .catch(this._handleToggleFailed.bind(this, event.target));
       },
       _handleToggleFailed: function(toggleBtn) {
-        this.$.toast.show('Failed to ' + (toggleBtn.checked ? 'en' : 'dis') + 'able notification');
+        this.fire('toast', 'Failed to ' + (toggleBtn.checked ? 'en' : 'dis') + 'able notification');
         toggleBtn.checked = !toggleBtn.checked;
       },
 
       _whenDeleteBtnClicked: function(event) {
         this.$.notificationsApi.deleteSubscription(event.model.subscription.id)
                 .then(this.load.bind(this))
-                .catch(this.$.toast.show.bind(this.$.toast, 'Failed to delete notification'));
+                .catch(this.fire.bind(this, 'toast', 'Failed to delete notification'));
       },
 
       _openForm: function(event) {
@@ -202,4 +202,3 @@
   </script>
 
 </dom-module>
-
